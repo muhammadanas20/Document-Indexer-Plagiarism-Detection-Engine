@@ -23,39 +23,39 @@ Alyan (matching, scoring, ranking, CLI, report). Two people, one owner per file.
  .txt   │  dir_walker ──► file_reader ──► DynamicBuffer            │
  .cpp ──┤                       │                                  │
         │                       ▼                                  │
-        │                   tokenizer ──► TokenPool {off,len,id,line}
-        │                       │              (exact + normalised views)
+        │                 tokenizer ──► TokenPool {off,len,id,line}
+        │                       │        (exact + normalised views)
         │                       ▼                                  │
-        │                  rolling_hash  (Rabin-Karp, O(1) roll)    │
+        │                  rolling_hash  (Rabin-Karp, O(1) roll)   │
         │                       │                                  │
         │                       ▼                                  │
-        │   HashTable<u64, OccurrenceList>   ◄── chained, grown at α=0.75
-        │        (open-addressing variant benchmarked alongside)    │
+        │HashTable<u64, OccurrenceList>◄── chained, grown at α=0.75
+        │        (open-addressing variant benchmarked alongside)   │
         │                       │                                  │
         │                       ▼                                  │
-        │              IndexBuilder ──► lookup(h, &count)           │
-        │                       │        DocumentView{norm,posToLine}
-        │                       │        IndexStats  (--stats)      │
+        │              IndexBuilder ──► lookup(h, &count)          │
+        │                       │       DocumentView{norm,posToLine}
+        │                       │        IndexStats  (--stats)     │
         └───────────────────────┼──────────────────────────────────┘
                                 │  the frozen API, due Sun 8 Nov
         ┌───────────────────────┼────────────── ALYAN ─────────────┐
         │                       ▼                                  │
-        │            candidate_generator ──► (docA,docB) pairs      │
+        │            candidate_generator ──► (docA,docB) pairs     │
         │                       │                                  │
         │                       ▼                                  │
-        │                 kmp_find_all ──► exact token matches      │
+        │                 kmp_find_all ──► exact token matches     │
         │                       │                                  │
         │                       ▼                                  │
-        │        span_merge (Anas) ──► disjoint maximal spans       │
+        │        span_merge (Anas) ──► disjoint maximal spans      │
         │                       │                                  │
         │                       ▼                                  │
-        │          scorer ──► jaccard / containment / coverage      │
+        │          scorer ──► jaccard / containment / coverage     │
         │                       │                                  │
         │                       ▼                                  │
-        │        MaxHeap (top-k)  +  RankTree (AVL leaderboard)     │
+        │        MaxHeap (top-k)  +  RankTree (AVL leaderboard)    │
         │                       │                                  │
         │                       ▼                                  │
-        │        cli  ──►  audit_report / json_writer  ──►  r.txt   │
+        │        cli  ──►  audit_report / json_writer  ──►  r.txt  │
         └──────────────────────────────────────────────────────────┘
 ```
 
