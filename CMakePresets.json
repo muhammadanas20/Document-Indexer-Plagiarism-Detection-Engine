@@ -1,0 +1,75 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "PLAG_WERROR": "ON"
+      }
+    },
+
+    {
+      "name": "debug",
+      "displayName": "Debug (asserts on, -O0)",
+      "description": "Everyday build. `cmake --preset debug && cmake --build build && ctest --test-dir build --output-on-failure`",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+
+    {
+      "name": "sanitize",
+      "displayName": "Sanitize (ASan + UBSan)",
+      "description": "Must be green before anything is pushed. `cmake --preset sanitize && cmake --build build-sanitize && ctest --test-dir build-sanitize --output-on-failure`",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build-sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all"
+      }
+    },
+
+    {
+      "name": "release",
+      "displayName": "Release (-O2, asserts off)",
+      "description": "The build the benchmarks and the submission use.",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PLAG_WERROR": "OFF"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "sanitize", "configurePreset": "sanitize" },
+    { "name": "release", "configurePreset": "release" }
+  ],
+
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    }
+  ]
+}

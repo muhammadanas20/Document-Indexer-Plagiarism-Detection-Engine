@@ -1,0 +1,4 @@
+Meeting notes, 12 October
+- split the work: index side vs matching side
+- agree the contract header before writing any code
+- the index API is the one hard deadline
