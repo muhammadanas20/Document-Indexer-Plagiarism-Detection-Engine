@@ -1,6 +1,4 @@
-// verify_mode.hpp -- verification modes and suspicion labels.
-// Owner: ALYAN.  src/search/ is Alyan's area.
-// STUB (Alyan, W3): dummy bodies.
+// Verification mode options and suspicion level labels
 #ifndef PLAG_SRC_SEARCH_VERIFY_MODE_HPP_
 #define PLAG_SRC_SEARCH_VERIFY_MODE_HPP_
 
@@ -9,9 +7,9 @@
 namespace plag {
 
 enum class VerifyMode : std::uint8_t {
-  Single = 0,   // one 64-bit fingerprint
-  Double,       // two independent modulus pairs -- the false-positive demo
-  Exact,        // re-compare the token ids themselves
+  Single = 0,
+  Double,
+  Exact,
 };
 
 enum class Suspicion : std::uint8_t {

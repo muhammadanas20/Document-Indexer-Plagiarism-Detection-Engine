@@ -1,10 +1,4 @@
-// pos_to_line.hpp -- byte offset -> 1-based line number.
-// Owner: Anas (shared, FROZEN after Week 1). Lives in src/common/ because the
-// tokenizer fills it and Alyan's report reads it.
-// WORKING and TESTED (tests/test_anas_common.cpp).
-//
-// Built once per file in a single pass; Alyan's report must never re-read a
-// file just to print a line number.
+// Helper functions to map byte offsets to 1-based line numbers
 #ifndef PLAG_SRC_COMMON_POS_TO_LINE_HPP_
 #define PLAG_SRC_COMMON_POS_TO_LINE_HPP_
 
@@ -15,7 +9,7 @@
 
 namespace plag {
 
-// line_starts[i] = byte offset of the first character of line i+1.
+// Record the starting byte offset of each line in the file
 inline void build_line_starts(const std::uint8_t* data, std::size_t n,
                               DynArray<std::uint32_t>& line_starts) {
   line_starts.clear();
@@ -27,21 +21,21 @@ inline void build_line_starts(const std::uint8_t* data, std::size_t n,
   }
 }
 
-// Binary search: the last line start <= off. 1-based, clamped to >= 1.
+// Find the 1-based line number for a given byte offset using binary search
 inline std::uint32_t pos_to_line(const DynArray<std::uint32_t>& line_starts,
                                  std::uint32_t off) {
   if (line_starts.empty()) return 1;
-  std::size_t lo = 0;
-  std::size_t hi = line_starts.size();  // one past the last candidate
-  while (hi - lo > 1) {
-    const std::size_t mid = lo + (hi - lo) / 2;
+  std::size_t low = 0;
+  std::size_t high = line_starts.size();
+  while (high - low > 1) {
+    std::size_t mid = low + (high - low) / 2;
     if (line_starts[mid] <= off) {
-      lo = mid;
+      low = mid;
     } else {
-      hi = mid;
+      high = mid;
     }
   }
-  return static_cast<std::uint32_t>(lo + 1);
+  return static_cast<std::uint32_t>(low + 1);
 }
 
 }  // namespace plag

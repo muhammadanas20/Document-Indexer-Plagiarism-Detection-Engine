@@ -1,71 +1,36 @@
-# Design
+# Architecture & Design Notes
 
-One architecture document for both halves. Anas writes §1-§2, Alyan writes §3-§4, in separate
-PRs, so the two never touch the same lines. Decisions from the Sunday call are recorded here
-the same day.
+## 1. Token Views and Line Mapping (`src/index/tokenizer.cpp`)
 
----
+Each file is read once into a `DynamicBuffer` and tokenized in a single pass:
+- Comments (`//` and `/* ... */`) and whitespace are skipped.
+- Each token stores its byte offset, length, 1-based line number (computed via binary search over `line_starts`), and 64-bit FNV-1a token ID.
+- When `--normalize=case` is enabled (default), ASCII letters are converted to lowercase while hashing so case differences and formatting changes produce the same token IDs.
 
-## 1. The two token views  *(Anas — lands Week 2)*
+## 2. O(1) Rolling Hash (`src/index/rolling_hash.cpp`)
 
-Every file is read once into a `DynamicBuffer` and tokenised into a single pool of
-`{offset, length}` slices. From that one allocation the engine gets two views:
+For a window of $k$ token IDs $(t_0, t_1, \dots, t_{k-1})$, the polynomial hash is:
 
-* **exact** — the bytes as written. Used for printing excerpts in the report.
-* **normalised** — the same slice, optionally lower-cased under `--normalize=case`. This is
-  the view that is compared, and it is what catches the student who only renamed variables
-  and reformatted the file.
+$$H = \left(\sum_{i=0}^{k-1} t_i \cdot b^{k-1-i}\right) \bmod p$$
 
-Two views, one allocation: no second copy of the corpus ever exists.
+where $p = 2^{61} - 1$. When sliding the window by one token (removing $t_{\text{out}}$ and adding $t_{\text{in}}$):
 
-> TODO(Anas W2, Step 3): two lines here explaining the two token views — this text goes
-> straight into the report.
+$$H' = \left((H + p - (t_{\text{out}} \cdot b^{k-1} \bmod p)) \cdot b + t_{\text{in}}\right) \bmod p$$
 
-## 2. Why the roll is O(1)  *(Anas — lands Week 2)*
+Because $b^{k-1} \bmod p$ (`highPow`) is precomputed once in `init()`, each slide takes $O(1)$ time regardless of $k$.
 
-The window hash is
+## 3. Candidate Generation, KMP Verification & Scoring (`src/search/`)
 
-```
-H  = (t0*b^(k-1) + t1*b^(k-2) + ... + t(k-1)) mod p
-```
+1. **Candidate Generation:** Iterates over the inverted index buckets and counts how many distinct $k$-gram fingerprints each document pair `(docA, docB)` shares using `HashTable<uint64_t, uint32_t>`.
+2. **KMP Verification:** For each candidate pair, `kmp_find_all` verifies exact token sequence matches over the normalized token ID arrays, and `merge_spans` merges contiguous or overlapping $k$-gram matches on the same diagonal into maximal copied spans.
+3. **Scoring:**
+   - **Jaccard:** $\frac{|A \cap B|}{|A \cup B|}$
+   - **Containment:** $\frac{|A \cap B|}{\min(|A|, |B|)}$ (catches small copied sections inside a larger file)
+   - **Coverage:** $\frac{\text{matched tokens}}{\min(\text{tokens}_A, \text{tokens}_B)}$
+   - **Suspicion Key:** $0.50 \cdot \text{coverage} + 0.30 \cdot \text{containment} + 0.20 \cdot \text{jaccard}$
 
-Sliding the window one token to the right does not recompute it:
+## 4. Ranking & Reporting (`src/rank/`, `src/report/`)
 
-```
-H' = ((H - out*b^(k-1)) * b + in) mod p
-```
-
-One subtraction, one multiplication, one addition — independent of `k`. `highPow = b^(k-1) mod p`
-is precomputed once in `init()`. Because the index is built with a single loop over the token
-stream (`roll()`, then `insert()`), the whole corpus costs **O(total tokens)** whatever `k` is.
-That is the one-sentence viva answer.
-
-Underflow guard: the modulus is added *before* the subtraction —
-`(H + p - mulmod(out, highPow)) % p` — and a debug build asserts `value < mod`.
-
-Modulus `p = 2^61 - 1`, base a random odd number chosen at start-up, so nobody can craft a
-collision on purpose. `--verify-mode=double` runs a second independent modulus pair.
-
-> TODO(Anas W2, Step 4): write this up the same day the roller is done, while it is fresh.
-
-## 3. Matching, candidates and scoring  *(Alyan — lands Week 5)*
-
-> TODO(Alyan): KMP over token ids, the candidate filter, and the Jaccard / containment /
-> coverage formulas, including which one is the primary suspicion key and why.
-
-## 4. Ranking and the report  *(Alyan — lands Week 6)*
-
-> TODO(Alyan): why a top-k heap *and* an AVL leaderboard, what the AVL buys that the heap does
-> not, and how the report gets line numbers from `DocumentView::posToLine` without re-reading
-> a single file.
-
----
-
-## Decisions log
-
-| date | decision | by |
-|---|---|---|
-| 2026-10-04 | Layout, root CMake and the contract header are frozen after Week 0/1; changes go through an issue, not an edit. | Anas |
-| 2026-10-04 | Every area's CMakeLists globs its own sources, so adding a file never edits a shared file. | Anas |
-| 2026-10-04 | `OccurrenceList` is `DynArray<Occurrence>` and hits are **appended**, not prepended — cache locality on the hot path. | Anas |
-| 2026-10-04 | Scope-cut order if we fall behind: (1) open-addressing benchmark → design paragraph, (2) smaller demo corpus, (3) drop `--format=json`. The index API for Alyan is never delayed. | both |
+- **`MaxHeap`:** Array-backed binary max-heap supporting $O(\log n)$ `push`/`pop` and `top_k` extraction.
+- **`RankTree`:** Self-balancing AVL tree using LL, RR, LR, and RL rotations to maintain $O(\log n)$ height even on sorted insertions, with reverse in-order traversal for leaderboard queries.
+- **`AuditReport` & `json_writer`:** Prints corpus statistics, ranked suspicious document pairs, and matched token spans mapped to 1-based source line numbers via `DocumentView::posToLine`.

@@ -1,6 +1,4 @@
-// dynamic_buffer.hpp -- growable byte buffer for file contents.
-// Owner: Anas.  src/index/ is Anas's area; do not edit outside your own paths.
-// STUB (W1 / Step 2): final signatures, dummy bodies. Replace when Step 2 lands.
+// Growable byte buffer for storing raw file contents
 #ifndef PLAG_SRC_INDEX_DYNAMIC_BUFFER_HPP_
 #define PLAG_SRC_INDEX_DYNAMIC_BUFFER_HPP_
 
@@ -9,8 +7,6 @@
 
 namespace plag {
 
-// Owns a raw uint8_t* buffer. Move-only on purpose: copying a 5 MB corpus
-// buffer by accident is the bug this class exists to prevent.
 class DynamicBuffer {
  public:
   DynamicBuffer();
@@ -23,7 +19,7 @@ class DynamicBuffer {
 
   void reserve_at_least(std::size_t need);
   void append(const std::uint8_t* src, std::size_t n);
-  void trim_trailing_cr();          // CRLF -> LF for Windows-authored corpora
+  void trim_trailing_cr();
   void clear();
 
   std::size_t size() const;

@@ -1,6 +1,4 @@
-// audit_report.hpp -- the human-readable audit report.
-// Owner: ALYAN.  src/report/ is Alyan's area.
-// STUB (Alyan, W6): dummy bodies.
+// Generates human-readable text audit reports for plagiarism detection
 #ifndef PLAG_SRC_REPORT_AUDIT_REPORT_HPP_
 #define PLAG_SRC_REPORT_AUDIT_REPORT_HPP_
 
@@ -12,17 +10,19 @@
 
 namespace plag {
 
-// Reads line numbers from Anas's DocumentView::posToLine -- it must never
-// re-read a file to print an excerpt.
+class IndexBuilder;
+
 class AuditReport {
  public:
   void set_stats(const IndexStats& st);
+  void set_index(const IndexBuilder* index);
   void add_pair(const PairScore& p);
   void add_spans(const Span* spans, std::size_t n);
   bool write_text(std::FILE* out) const;
 
  private:
   IndexStats stats_{};
+  const IndexBuilder* index_ = nullptr;
   DynArray<PairScore> pairs_;
   DynArray<Span> spans_;
 };

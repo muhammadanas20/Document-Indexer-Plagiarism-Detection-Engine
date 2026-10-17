@@ -1,7 +1,4 @@
-// test_anas_spans.cpp -- scattered hits -> disjoint maximal copied spans.
-// Owner: Anas.  Step 7c (Week 5).
-//
-// STUB: merge_spans() emits nothing yet.
+// Unit tests for span_merge
 #include <cstddef>
 
 #include "common/dyn_array.hpp"
@@ -9,32 +6,38 @@
 #include "index/span_merge.hpp"
 #include "harness.hpp"
 
-PLAG_TEST(merge_spans_stub_produces_no_spans) {
-  plag::Span hits[2] = {};
+PLAG_TEST(merge_empty_spans) {
   plag::DynArray<plag::Span> out;
-  const std::size_t n = plag::merge_spans(hits, 2, 0, out);
+  std::size_t n = plag::merge_spans(nullptr, 0, 0, out);
   CHECK_EQ(n, std::size_t{0});
-  CHECK_EQ(out.size(), std::size_t{0});
-  PLAG_STUB_NOTE("Step 7c -- span merging");
+  CHECK(out.empty());
 }
 
-PLAG_TEST(hits_one_token_apart_merge_into_one_span) {
-  // TODO(Anas W5 Step 7c): (0..10 | 0..10) and (10..11 | 10..11) merge into
-  // 0..11 in both documents.
-  PLAG_STUB_NOTE("Step 7c -- adjacency merge");
-  CHECK(true);
+PLAG_TEST(adjacent_and_overlapping_spans_merge) {
+  plag::Span hits[3] = {
+      {0, 0, 5, 1, 10, 15},
+      {0, 1, 6, 1, 11, 16},
+      {0, 6, 10, 1, 16, 20},
+  };
+  plag::DynArray<plag::Span> out;
+  std::size_t n = plag::merge_spans(hits, 3, 0, out);
+
+  CHECK_EQ(n, std::size_t{1});
+  CHECK_EQ(out[0].startA, 0u);
+  CHECK_EQ(out[0].endA, 10u);
+  CHECK_EQ(out[0].startB, 10u);
+  CHECK_EQ(out[0].endB, 20u);
 }
 
-PLAG_TEST(hits_with_a_different_offset_in_b_stay_separate) {
-  // A different offset in B means a different copied block: it must NOT merge.
-  // TODO(Anas W5 Step 7c).
-  PLAG_STUB_NOTE("Step 7c -- offset mismatch");
-  CHECK(true);
-}
+PLAG_TEST(spans_with_different_offsets_stay_separate) {
+  plag::Span hits[2] = {
+      {0, 0, 5, 1, 0, 5},
+      {0, 5, 10, 1, 20, 25},
+  };
+  plag::DynArray<plag::Span> out;
+  std::size_t n = plag::merge_spans(hits, 2, 0, out);
 
-PLAG_TEST(merged_spans_equal_a_naive_longest_common_substring_scan) {
-  // 500 random corpora, merged spans compared against a naive LCS scan.
-  // TODO(Anas W5 Step 7c).
-  PLAG_STUB_NOTE("Step 7c -- naive oracle cross-check");
-  CHECK(true);
+  CHECK_EQ(n, std::size_t{2});
+  CHECK_EQ(out[0].tokens(), 5u);
+  CHECK_EQ(out[1].tokens(), 5u);
 }

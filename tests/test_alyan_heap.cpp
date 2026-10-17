@@ -1,26 +1,61 @@
-// test_alyan_heap.cpp -- PLACEHOLDER created by Anas in Week 0/1 so the tests glob and CI
-// have something to build.  *** OWNER: ALYAN. *** Replace this file freely;
-// Anas never edits it (one owner per file).
-//
-// Step: Alyan W3 -- top-k heap. Every case below is the real test name with its real intent, so
-// the plan is visible in the repo before the code exists.
+// Unit tests for MaxHeap
 #include "rank/max_heap.hpp"
+#include "search/scorer.hpp"
 #include "harness.hpp"
 
-PLAG_TEST(stub_heap_is_empty) {
-  // TODO(Alyan W3): push/pop/top_k against a std::priority_queue oracle.
-  PLAG_STUB_NOTE("Step: Alyan W3 -- top-k heap");
-  CHECK(true);
+namespace {
+
+plag::PairScore make_pair(plag::DocumentId a, plag::DocumentId b, double cov) {
+  plag::PairScore p;
+  p.docA = a;
+  p.docB = b;
+  p.jaccard = cov;
+  p.containment = cov;
+  p.coverage = cov;
+  p.matchedTokens = static_cast<std::uint32_t>(cov * 100.0);
+  return p;
 }
 
-PLAG_TEST(descending_input_is_the_worst_case) {
-  // TODO(Alyan W3): sorted input must not degrade the heap.
-  PLAG_STUB_NOTE("Step: Alyan W3 -- top-k heap");
-  CHECK(true);
+}  // namespace
+
+PLAG_TEST(empty_heap_properties) {
+  plag::MaxHeap h;
+  CHECK(h.empty());
+  CHECK_EQ(h.size(), std::size_t{0});
 }
 
-PLAG_TEST(top_k_returns_descending_order) {
-  // TODO(Alyan W3).
-  PLAG_STUB_NOTE("Step: Alyan W3 -- top-k heap");
-  CHECK(true);
+PLAG_TEST(push_and_pop_descending_order) {
+  plag::MaxHeap h;
+  h.push(make_pair(0, 1, 0.25));
+  h.push(make_pair(0, 2, 0.90));
+  h.push(make_pair(1, 2, 0.55));
+  h.push(make_pair(2, 3, 0.75));
+
+  CHECK_EQ(h.size(), std::size_t{4});
+  CHECK_NEAR(h.top().coverage, 0.90, 1e-9);
+
+  plag::PairScore p1 = h.pop();
+  plag::PairScore p2 = h.pop();
+  plag::PairScore p3 = h.pop();
+  plag::PairScore p4 = h.pop();
+
+  CHECK(plag::suspicion_key(p1) >= plag::suspicion_key(p2));
+  CHECK(plag::suspicion_key(p2) >= plag::suspicion_key(p3));
+  CHECK(plag::suspicion_key(p3) >= plag::suspicion_key(p4));
+  CHECK(h.empty());
+}
+
+PLAG_TEST(top_k_returns_highest_pairs_without_destroying_heap) {
+  plag::MaxHeap h;
+  for (int i = 1; i <= 10; ++i) {
+    h.push(make_pair(0, static_cast<plag::DocumentId>(i), i * 0.1));
+  }
+
+  plag::DynArray<plag::PairScore> top3;
+  std::size_t got = h.top_k(3, top3);
+  CHECK_EQ(got, std::size_t{3});
+  CHECK_EQ(h.size(), std::size_t{10});
+  CHECK_NEAR(top3[0].coverage, 1.0, 1e-9);
+  CHECK_NEAR(top3[1].coverage, 0.9, 1e-9);
+  CHECK_NEAR(top3[2].coverage, 0.8, 1e-9);
 }

@@ -1,10 +1,4 @@
-// main.cpp -- the plag-detect entry point.
-// Owner: Anas.  Command wiring lands in the week docs/tasks.md lists
-// main.cpp; Alyan requests the wiring or wires it himself that week.
-//
-// WEEK 0 STUB: prints the version banner and usage, then exits 0. Real
-// subcommands (index / detect / report) arrive with Step 6 (Anas) and Step 8
-// (Alyan's CLI).
+// Entry point for the plag-detect command-line tool
 #include <cstdio>
 #include <cstring>
 
@@ -12,9 +6,11 @@
 
 namespace {
 
-constexpr const char* kVersion = "plag-detect 0.1 (stub)";
+constexpr const char* kVersion = "plag-detect 1.0";
 
-bool is_flag(const char* a, const char* b) { return std::strcmp(a, b) == 0; }
+bool is_flag(const char* a, const char* b) {
+  return std::strcmp(a, b) == 0;
+}
 
 }  // namespace
 
@@ -36,12 +32,10 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  // TODO(Anas W4 / Step 6): `index <corpus> --stats`
-  // TODO(Alyan W6 / Step 8): parse_args() + run() + exit codes 0/1/2/3.
   plag::CliOptions opts;
   if (!plag::parse_args(argc, argv, opts)) {
     std::fprintf(stderr, "%s: bad argument (see --help)\n", kVersion);
-    return 2;  // ErrorCode::BadArg -> exit 2
+    return 2;
   }
   return plag::run(opts);
 }

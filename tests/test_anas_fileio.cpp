@@ -1,10 +1,6 @@
-// test_anas_fileio.cpp -- DynamicBuffer, file_reader, dir_walker.
-// Owner: Anas.  Step 2 (Week 1). Fixtures live in tests/fixtures/anas/.
-//
-// STUB: reader and walker are not implemented. The missing-file case below is
-// already the real expected behaviour (NotFound); the success paths are marked
-// TODO and land with Step 2.
+// Unit tests for DynamicBuffer, file_reader, and dir_walker
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #include "contract/error_code.hpp"
@@ -13,42 +9,60 @@
 #include "index/file_reader.hpp"
 #include "harness.hpp"
 
-PLAG_TEST(dynamic_buffer_starts_empty_and_moves_cleanly) {
-  plag::DynamicBuffer b;
-  CHECK_EQ(b.size(), std::size_t{0});
-  CHECK(b.empty());
+PLAG_TEST(dynamic_buffer_append_and_trim_cr) {
+  plag::DynamicBuffer buf;
+  CHECK(buf.empty());
 
-  plag::DynamicBuffer moved(std::move(b));
-  CHECK_EQ(moved.size(), std::size_t{0});
-  CHECK_EQ(b.size(), std::size_t{0});
+  const char* text = "line1\r\nline2\r\n";
+  buf.append(reinterpret_cast<const std::uint8_t*>(text), std::strlen(text));
+  CHECK_EQ(buf.size(), std::size_t{14});
+
+  buf.trim_trailing_cr();
+  CHECK_EQ(buf.size(), std::size_t{12});
+  CHECK(std::memcmp(buf.data(), "line1\nline2\n", 12) == 0);
 }
 
-PLAG_TEST(read_file_reports_not_found_for_a_missing_file) {
-  plag::DynamicBuffer b;
-  const plag::ErrorCode rc = plag::read_file("/definitely/not/here/nope.txt", b);
-  CHECK(rc == plag::ErrorCode::NotFound);
-  CHECK_EQ(b.size(), std::size_t{0});
+PLAG_TEST(read_file_missing_and_empty) {
+  plag::DynamicBuffer buf;
+  CHECK(plag::read_file("/nonexistent/file/path.txt", buf) ==
+        plag::ErrorCode::NotFound);
+
+  std::string empty_path = std::string(PLAG_FIXTURE_DIR) + "/anas/empty.txt";
+  CHECK(plag::read_file(empty_path.c_str(), buf) ==
+        plag::ErrorCode::EmptyFile);
 }
 
-PLAG_TEST(read_file_reads_a_fixture_byte_for_byte) {
-  // TODO(Anas W1 Step 2): bytes read == stat -c%s minus the \r count, for every
-  // fixture in tests/fixtures/anas/.
-  plag::DynamicBuffer b;
-  const std::string path = std::string(PLAG_FIXTURE_DIR) + "/anas/simple.txt";
-  const plag::ErrorCode rc = plag::read_file(path.c_str(), b);
-  // STUB: the reader is not implemented, so nothing is read yet.
-  CHECK(rc == plag::ErrorCode::NotFound);
-  CHECK_EQ(b.size(), std::size_t{0});
-  PLAG_STUB_NOTE("Step 2 -- golden byte-count test per fixture");
+PLAG_TEST(read_file_crlf_matches_simple_fixture) {
+  plag::DynamicBuffer simple_buf;
+  plag::DynamicBuffer crlf_buf;
+
+  std::string p1 = std::string(PLAG_FIXTURE_DIR) + "/anas/simple.txt";
+  std::string p2 = std::string(PLAG_FIXTURE_DIR) + "/anas/crlf.txt";
+
+  CHECK(plag::read_file(p1.c_str(), simple_buf) == plag::ErrorCode::Ok);
+  CHECK(plag::read_file(p2.c_str(), crlf_buf) == plag::ErrorCode::Ok);
+
+  CHECK_EQ(simple_buf.size(), crlf_buf.size());
+  CHECK(std::memcmp(simple_buf.data(), crlf_buf.data(), simple_buf.size()) == 0);
 }
 
-PLAG_TEST(walk_dir_lists_indexable_files_in_sorted_order) {
-  // TODO(Anas W1 Step 2): output must equal `find . -type f | sort` filtered by
-  // the extension whitelist, and be identical across two consecutive runs.
-  plag::DynArray<char*> paths;
-  const std::string root = std::string(PLAG_CORPUS_DIR) + "/anas/small";
-  const plag::ErrorCode rc = plag::walk_dir(root.c_str(), paths);
-  CHECK(rc == plag::ErrorCode::NotFound);   // STUB: nothing walked yet
-  CHECK_EQ(paths.size(), std::size_t{0});
-  PLAG_STUB_NOTE("Step 2 -- walker reproducibility test");
+PLAG_TEST(walk_dir_lists_files_in_sorted_order) {
+  plag::DynArray<char*> pathsA;
+  plag::DynArray<char*> pathsB;
+  std::string root = std::string(PLAG_CORPUS_DIR) + "/anas/small";
+
+  CHECK(plag::walk_dir(root.c_str(), pathsA) == plag::ErrorCode::Ok);
+  CHECK(plag::walk_dir(root.c_str(), pathsB) == plag::ErrorCode::Ok);
+  CHECK_EQ(pathsA.size(), std::size_t{6});
+  CHECK_EQ(pathsA.size(), pathsB.size());
+
+  for (std::size_t i = 0; i < pathsA.size(); ++i) {
+    CHECK_EQ(std::string(pathsA[i]), std::string(pathsB[i]));
+    if (i > 0) {
+      CHECK(std::strcmp(pathsA[i - 1], pathsA[i]) < 0);
+    }
+  }
+
+  plag::free_walk_paths(pathsA);
+  plag::free_walk_paths(pathsB);
 }
