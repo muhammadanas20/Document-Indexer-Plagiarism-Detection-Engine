@@ -1,6 +1,4 @@
-# tools/ -- benchmarks and generators, prefixed by owner.
-# Owner of this file: Anas (created Week 0). Each of us only ever adds files
-# with our own prefix, so nobody shares a filename with anyone.
+# Benchmark tools
 file(GLOB TOOLS_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 foreach(tool_src ${TOOLS_SRC})

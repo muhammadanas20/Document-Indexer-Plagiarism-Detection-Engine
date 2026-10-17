@@ -1,5 +1,4 @@
-// span.hpp -- a maximal copied block between two documents.
-// Owner: Anas.  FROZEN after Week 1.
+// Represents a matching token span between two documents
 #ifndef PLAG_SRC_CONTRACT_SPAN_HPP_
 #define PLAG_SRC_CONTRACT_SPAN_HPP_
 
@@ -7,8 +6,7 @@
 
 namespace plag {
 
-// Half-open token ranges: [startA, endA) in docA, [startB, endB) in docB.
-// The invariant merge_spans() asserts: endA - startA == endB - startB.
+// Half-open token intervals [startA, endA) in docA and [startB, endB) in docB
 struct Span {
   std::uint32_t docA = 0;
   std::uint32_t startA = 0;

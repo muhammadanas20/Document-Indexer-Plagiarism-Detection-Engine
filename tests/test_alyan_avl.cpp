@@ -1,26 +1,53 @@
-// test_alyan_avl.cpp -- PLACEHOLDER created by Anas in Week 0/1 so the tests glob and CI
-// have something to build.  *** OWNER: ALYAN. *** Replace this file freely;
-// Anas never edits it (one owner per file).
-//
-// Step: Alyan W4 -- AVL leaderboard. Every case below is the real test name with its real intent, so
-// the plan is visible in the repo before the code exists.
+// Unit tests for RankTree (AVL tree leaderboard)
 #include "rank/rank_tree.hpp"
+#include "search/scorer.hpp"
 #include "harness.hpp"
 
-PLAG_TEST(stub_tree_is_empty) {
-  // TODO(Alyan W4): insert 100k sorted keys, height must stay <= 1.45*log2(n).
-  PLAG_STUB_NOTE("Step: Alyan W4 -- AVL leaderboard");
-  CHECK(true);
+namespace {
+
+plag::PairScore make_pair(plag::DocumentId a, plag::DocumentId b, double cov) {
+  plag::PairScore p;
+  p.docA = a;
+  p.docB = b;
+  p.jaccard = cov;
+  p.containment = cov;
+  p.coverage = cov;
+  p.matchedTokens = static_cast<std::uint32_t>(cov * 1000.0);
+  return p;
 }
 
-PLAG_TEST(rotations_keep_the_tree_balanced) {
-  // TODO(Alyan W4): LL, RR, LR, RL -- this is the viva risk.
-  PLAG_STUB_NOTE("Step: Alyan W4 -- AVL leaderboard");
-  CHECK(true);
+}  // namespace
+
+PLAG_TEST(empty_tree_has_zero_size_and_height) {
+  plag::RankTree t;
+  CHECK_EQ(t.size(), std::size_t{0});
+  CHECK_EQ(t.height(), std::size_t{0});
+}
+
+PLAG_TEST(sorted_insertions_stay_balanced) {
+  plag::RankTree t;
+  for (int i = 1; i <= 1000; ++i) {
+    t.insert(make_pair(0, static_cast<plag::DocumentId>(i), i / 1000.0));
+  }
+
+  CHECK_EQ(t.size(), std::size_t{1000});
+  // For 1000 nodes, an AVL tree height is at most ~15 (1.44 * log2(1000))
+  CHECK(t.height() <= 15);
+  CHECK(t.height() >= 10);
 }
 
 PLAG_TEST(top_k_walk_is_descending) {
-  // TODO(Alyan W4).
-  PLAG_STUB_NOTE("Step: Alyan W4 -- AVL leaderboard");
-  CHECK(true);
+  plag::RankTree t;
+  t.insert(make_pair(0, 1, 0.20));
+  t.insert(make_pair(0, 2, 0.85));
+  t.insert(make_pair(0, 3, 0.40));
+  t.insert(make_pair(0, 4, 0.65));
+  t.insert(make_pair(0, 5, 0.95));
+
+  plag::DynArray<plag::PairScore> top;
+  std::size_t n = t.top_k(3, top);
+  CHECK_EQ(n, std::size_t{3});
+  CHECK_NEAR(top[0].coverage, 0.95, 1e-9);
+  CHECK_NEAR(top[1].coverage, 0.85, 1e-9);
+  CHECK_NEAR(top[2].coverage, 0.65, 1e-9);
 }

@@ -1,26 +1,38 @@
-// test_alyan_candidates.cpp -- PLACEHOLDER created by Anas in Week 0/1 so the tests glob and CI
-// have something to build.  *** OWNER: ALYAN. *** Replace this file freely;
-// Anas never edits it (one owner per file).
-//
-// Step: Alyan W5 -- candidate generation. Every case below is the real test name with its real intent, so
-// the plan is visible in the repo before the code exists.
+// Unit tests for candidate pair generation
+#include <cstdint>
+
+#include "index/index_builder.hpp"
 #include "search/candidate_generator.hpp"
 #include "harness.hpp"
 
-PLAG_TEST(stub_emits_no_candidates_yet) {
-  // TODO(Alyan W5): pairs above minShared come out of Anas's index.
-  PLAG_STUB_NOTE("Step: Alyan W5 -- candidate generation");
-  CHECK(true);
+PLAG_TEST(empty_index_emits_no_candidates) {
+  plag::IndexBuilder idx;
+  plag::DynArray<plag::CandidatePair> out;
+  CHECK_EQ(plag::generate_candidates(idx, 1, out), std::size_t{0});
+  CHECK(out.empty());
 }
 
-PLAG_TEST(identical_documents_are_always_candidates) {
-  // TODO(Alyan W5).
-  PLAG_STUB_NOTE("Step: Alyan W5 -- candidate generation");
-  CHECK(true);
+PLAG_TEST(identical_documents_are_candidates) {
+  plag::IndexBuilder idx;
+  const std::uint64_t ids[6] = {10, 20, 30, 40, 50, 60};
+  idx.add_document(0, "a.txt", ids, 6, 3);
+  idx.add_document(1, "b.txt", ids, 6, 3);
+
+  plag::DynArray<plag::CandidatePair> out;
+  std::size_t count = plag::generate_candidates(idx, 1, out);
+  CHECK_EQ(count, std::size_t{1});
+  CHECK_EQ(out[0].docA, 0u);
+  CHECK_EQ(out[0].docB, 1u);
+  CHECK_EQ(out[0].sharedKgrams, 4u);
 }
 
-PLAG_TEST(disjoint_documents_are_never_candidates) {
-  // TODO(Alyan W5).
-  PLAG_STUB_NOTE("Step: Alyan W5 -- candidate generation");
-  CHECK(true);
+PLAG_TEST(disjoint_documents_are_not_candidates) {
+  plag::IndexBuilder idx;
+  const std::uint64_t docA[5] = {1, 2, 3, 4, 5};
+  const std::uint64_t docB[5] = {101, 102, 103, 104, 105};
+  idx.add_document(0, "a.txt", docA, 5, 3);
+  idx.add_document(1, "b.txt", docB, 5, 3);
+
+  plag::DynArray<plag::CandidatePair> out;
+  CHECK_EQ(plag::generate_candidates(idx, 1, out), std::size_t{0});
 }

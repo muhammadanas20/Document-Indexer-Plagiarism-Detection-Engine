@@ -1,39 +1,26 @@
-// hash_table.hpp -- separate-chaining map written from scratch (no STL).
-// Owner: Anas.  src/index/ is Anas's area.
-//
-// STUB (W3 / Step 5): the members are defined inline with dummy bodies so the
-// whole project links from Week 0 -- "stub first, so the other person never
-// waits". The real implementation replaces these bodies in Step 5 and stays in
-// this header, because a template's definition must be visible to its users.
-// This is the graded centrepiece: the table everything else leans on.
+// Hash table using separate chaining (no STL containers)
 #ifndef PLAG_SRC_INDEX_HASH_TABLE_HPP_
 #define PLAG_SRC_INDEX_HASH_TABLE_HPP_
 
 #include <cstddef>
 #include <cstdint>
 
+#include "common/fnv.hpp"
+
 namespace plag {
 
-// Key -> value map, separate chaining, own nodes, no STL containers.
-// Templated on purpose: the index uses it as fingerprint -> OccurrenceList,
-// Alyan reuses it as (docA,docB) -> int. If it only works for fingerprints it
-// is not done.
-//
-// Design choices to defend in the viva:
-//   * bucket index = (h ^ (h >> 32)) % capacity -- mixing the high bits saves
-//     us when a finaliser leaves the low bits boring;
-//   * grow when entries > capacity * 0.75 -- doubling keeps insertion amortised
-//     O(1), so indexing the corpus stays linear;
-//   * nodes held by the table, freed by the destructor; copy is deleted, not
-//     merely expensive.
-template <class K, class V>
+template <typename K, typename V>
 class HashTable {
  public:
-  HashTable() = default;
+  HashTable() : buckets_(nullptr), cap_(16), size_(0) {
+    buckets_ = new Node*[cap_];
+    for (std::size_t i = 0; i < cap_; ++i) {
+      buckets_[i] = nullptr;
+    }
+  }
 
   ~HashTable() {
-    // TODO(Anas W3 Step 5): walk every bucket and delete every node, then
-    // delete[] buckets_. Today buckets_ is never allocated, so this is safe.
+    clear_nodes();
     delete[] buckets_;
     buckets_ = nullptr;
   }
@@ -41,47 +28,108 @@ class HashTable {
   HashTable(const HashTable&) = delete;
   HashTable& operator=(const HashTable&) = delete;
 
-  // Returns a reference to the stored value so callers can append to it.
+  // Insert key-value pair or update existing value; returns reference to value
   V& insert(const K& k, const V& v) {
-    (void)k;
-    (void)v;
-    // TODO(Anas W3 Step 5): bucket index -> walk the chain -> append or push a
-    // new node at the front -> ++size_ -> grow() if the load factor passed 0.75.
-    static V stub_value{};
-    return stub_value;
+    if (size_ + 1 > (cap_ * 3) / 4) {
+      grow();
+    }
+    std::size_t idx = index_of(static_cast<std::uint64_t>(k));
+    Node* cur = buckets_[idx];
+    while (cur != nullptr) {
+      if (cur->key == k) {
+        cur->val = v;
+        return cur->val;
+      }
+      cur = cur->next;
+    }
+
+    Node* node = new Node{k, v, buckets_[idx]};
+    buckets_[idx] = node;
+    ++size_;
+    return node->val;
   }
 
   V* find(const K& k) {
-    (void)k;
-    // TODO(Anas W3 Step 5): walk the chain, compare keys.
+    if (buckets_ == nullptr || cap_ == 0) return nullptr;
+    std::size_t idx = index_of(static_cast<std::uint64_t>(k));
+    Node* cur = buckets_[idx];
+    while (cur != nullptr) {
+      if (cur->key == k) {
+        return &cur->val;
+      }
+      cur = cur->next;
+    }
     return nullptr;
   }
 
   const V* find(const K& k) const {
-    (void)k;
+    if (buckets_ == nullptr || cap_ == 0) return nullptr;
+    std::size_t idx = index_of(static_cast<std::uint64_t>(k));
+    const Node* cur = buckets_[idx];
+    while (cur != nullptr) {
+      if (cur->key == k) {
+        return &cur->val;
+      }
+      cur = cur->next;
+    }
     return nullptr;
   }
 
   bool erase(const K& k) {
-    (void)k;
-    return false;  // TODO(Anas W3 Step 5)
+    if (buckets_ == nullptr || cap_ == 0) return false;
+    std::size_t idx = index_of(static_cast<std::uint64_t>(k));
+    Node* cur = buckets_[idx];
+    Node* prev = nullptr;
+    while (cur != nullptr) {
+      if (cur->key == k) {
+        if (prev == nullptr) {
+          buckets_[idx] = cur->next;
+        } else {
+          prev->next = cur->next;
+        }
+        delete cur;
+        --size_;
+        return true;
+      }
+      prev = cur;
+      cur = cur->next;
+    }
+    return false;
   }
 
   std::size_t bucketCount() const { return cap_; }
   std::size_t size() const { return size_; }
 
   double meanChainLength() const {
-    return cap_ == 0 ? 0.0 : static_cast<double>(size_) / static_cast<double>(cap_);
+    if (cap_ == 0) return 0.0;
+    return static_cast<double>(size_) / static_cast<double>(cap_);
   }
 
   std::size_t longestChain() const {
-    // TODO(Anas W3 Step 5): max chain length over all buckets.
-    return 0;
+    std::size_t best = 0;
+    for (std::size_t i = 0; i < cap_; ++i) {
+      std::size_t len = 0;
+      const Node* cur = buckets_[i];
+      while (cur != nullptr) {
+        ++len;
+        cur = cur->next;
+      }
+      if (len > best) {
+        best = len;
+      }
+    }
+    return best;
   }
 
-  template <class F>
-  void for_each_bucket(F&& fn) const {
-    (void)fn;  // TODO(Anas W3 Step 5): visit (key, value) for every entry.
+  template <typename Func>
+  void for_each_bucket(Func fn) const {
+    for (std::size_t i = 0; i < cap_; ++i) {
+      const Node* cur = buckets_[i];
+      while (cur != nullptr) {
+        fn(cur->key, cur->val);
+        cur = cur->next;
+      }
+    }
   }
 
  private:
@@ -91,19 +139,50 @@ class HashTable {
     Node* next;
   };
 
-  // Mixing the high bits into the bucket index.
   std::size_t index_of(std::uint64_t h) const {
-    return static_cast<std::size_t>((h ^ (h >> 32)) % cap_);
+    return static_cast<std::size_t>(fnv_mix(h) % cap_);
+  }
+
+  void clear_nodes() {
+    if (buckets_ == nullptr) return;
+    for (std::size_t i = 0; i < cap_; ++i) {
+      Node* cur = buckets_[i];
+      while (cur != nullptr) {
+        Node* next = cur->next;
+        delete cur;
+        cur = next;
+      }
+      buckets_[i] = nullptr;
+    }
+    size_ = 0;
   }
 
   void grow() {
-    // TODO(Anas W3 Step 5): cap_ *= 2, re-insert every node. Keys are
-    // unchanged; only their bucket index moves.
+    std::size_t old_cap = cap_;
+    Node** old_buckets = buckets_;
+
+    cap_ = old_cap * 2;
+    buckets_ = new Node*[cap_];
+    for (std::size_t i = 0; i < cap_; ++i) {
+      buckets_[i] = nullptr;
+    }
+
+    for (std::size_t i = 0; i < old_cap; ++i) {
+      Node* cur = old_buckets[i];
+      while (cur != nullptr) {
+        Node* next = cur->next;
+        std::size_t idx = index_of(static_cast<std::uint64_t>(cur->key));
+        cur->next = buckets_[idx];
+        buckets_[idx] = cur;
+        cur = next;
+      }
+    }
+    delete[] old_buckets;
   }
 
-  Node** buckets_ = nullptr;
-  std::size_t cap_ = 16;
-  std::size_t size_ = 0;
+  Node** buckets_;
+  std::size_t cap_;
+  std::size_t size_;
 };
 
 }  // namespace plag

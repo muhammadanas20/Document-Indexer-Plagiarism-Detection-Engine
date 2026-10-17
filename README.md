@@ -1,137 +1,67 @@
-# plag-engine
+# Document Indexer & Plagiarism Detection Engine
 
-**Document Indexer & Plagiarism Detection Engine** — C++17, no STL containers in engine code.
+A command-line document indexing and plagiarism detection engine written in C++17 for our Data Structures course project. All core containers (`DynArray`, `HashTable`, `OpenHashTable`, `MaxHeap`, and `RankTree` AVL tree) are implemented from scratch without using STL containers (`std::vector`, `std::unordered_map`, `std::map`, `std::priority_queue`, or `std::sort`) in engine code.
 
-`plag-detect` reads a corpus of `.txt` / `.cpp` files, breaks each file into tokens, rolls a
-Rabin–Karp fingerprint over every window of *k* tokens, stores `fingerprint → every place it
-occurs` in a hash table written from scratch, then verifies the candidate pairs with KMP over
-token arrays, scores them (Jaccard / containment / coverage), ranks them with a top-*k* heap
-and an AVL leaderboard, and writes an audit report with line numbers. Every container in the
-engine — the dynamic array, the hash table, the heap, the AVL tree — is hand-written; the STL
-appears only in `tests/`, where it serves as the oracle.
-
-**Team:** Anas (group leader — corpus, indexing, core data structures, the shared build) and
-Alyan (matching, scoring, ranking, CLI, report). Two people, one owner per file.
+**Team Members:**
+- **Anas:** Corpus reading (`DynamicBuffer`, `file_reader`, `dir_walker`), tokenizer, Rabin-Karp rolling hash, hash tables (separate chaining and open addressing), index builder, and span merging.
+- **Alyan:** Candidate generation, KMP string matching over token arrays, similarity scoring (Jaccard, containment, coverage), Max-Heap, AVL leaderboard (`RankTree`), CLI, and audit/JSON reporting.
 
 ---
 
-## The pipeline
+## How It Works
 
-```
-        ┌────────────────────────── ANAS ──────────────────────────┐
-        │                                                          │
- .txt   │  dir_walker ──► file_reader ──► DynamicBuffer            │
- .cpp ──┤                       │                                  │
-        │                       ▼                                  │
-        │                 tokenizer ──► TokenPool {off,len,id,line}
-        │                       │        (exact + normalised views)
-        │                       ▼                                  │
-        │                  rolling_hash  (Rabin-Karp, O(1) roll)   │
-        │                       │                                  │
-        │                       ▼                                  │
-        │HashTable<u64, OccurrenceList>◄── chained, grown at α=0.75
-        │        (open-addressing variant benchmarked alongside)   │
-        │                       │                                  │
-        │                       ▼                                  │
-        │              IndexBuilder ──► lookup(h, &count)          │
-        │                       │       DocumentView{norm,posToLine}
-        │                       │        IndexStats  (--stats)     │
-        └───────────────────────┼──────────────────────────────────┘
-                                │  the frozen API, due Sun 8 Nov
-        ┌───────────────────────┼────────────── ALYAN ─────────────┐
-        │                       ▼                                  │
-        │            candidate_generator ──► (docA,docB) pairs     │
-        │                       │                                  │
-        │                       ▼                                  │
-        │                 kmp_find_all ──► exact token matches     │
-        │                       │                                  │
-        │                       ▼                                  │
-        │        span_merge (Anas) ──► disjoint maximal spans      │
-        │                       │                                  │
-        │                       ▼                                  │
-        │          scorer ──► jaccard / containment / coverage     │
-        │                       │                                  │
-        │                       ▼                                  │
-        │        MaxHeap (top-k)  +  RankTree (AVL leaderboard)    │
-        │                       │                                  │
-        │                       ▼                                  │
-        │        cli  ──►  audit_report / json_writer  ──►  r.txt  │
-        └──────────────────────────────────────────────────────────┘
-```
+1. **File Reading & Tokenization (`src/index/`):**
+   - Walks a corpus directory recursively for `.txt`, `.cpp`, `.hpp`, `.h`, `.cc`, and `.c` files in sorted order.
+   - Reads file bytes into `DynamicBuffer`, strips comments and whitespace, and converts tokens into 64-bit FNV-1a token IDs (with optional case normalization) while tracking 1-based line numbers (`posToLine`).
+2. **Rabin-Karp Rolling Hash & Indexing (`src/index/`):**
+   - Slides a window of size `k` over each document's token ID stream in $O(1)$ time per step modulo $2^{61}-1$.
+   - Stores `fingerprint -> OccurrenceList` in a custom separate-chaining `HashTable` that doubles capacity when the load factor exceeds $0.75$.
+3. **Candidate Generation & KMP Verification (`src/search/`):**
+   - Counts shared $k$-gram fingerprints between document pairs and filters pairs meeting `minShared`.
+   - Verifies exact token matches between candidate pairs using the Knuth-Morris-Pratt (KMP) algorithm (`kmp_find_all`) and merges adjacent/overlapping matches into maximal spans (`merge_spans`).
+4. **Scoring, Ranking & Reporting (`src/search/`, `src/rank/`, `src/report/`):**
+   - Computes **Jaccard**, **Containment**, and **Coverage** similarity scores and assigns a suspicion label (`none`, `low`, `medium`, `high`, `critical`).
+   - Ranks pairs using a custom `MaxHeap` and self-balancing AVL tree (`RankTree`).
+   - Outputs either a human-readable text audit report (`AuditReport`) with line numbers or structured JSON (`json_writer`).
 
-## Build and run
+---
+
+## Build & Run
 
 ```bash
-cmake --preset debug                     # configures into build/
-cmake --build build                      # builds plag-detect + every test
-ctest --test-dir build --output-on-failure   # or: cmake --build build --target check
+# Configure and build (Debug preset)
+cmake --preset debug
+cmake --build build
 
-./build/bin/plag-detect --version        # plag-detect 0.1 (stub)
-./build/bin/plag-detect index tests/corpus/anas/small --stats   # from Step 6
+# Run all unit tests
+ctest --test-dir build --output-on-failure
+
+# Build index and print stats
+./build/bin/plag-detect index tests/corpus/anas/small --stats
+
+# Run plagiarism detection on a directory (with window size k=5)
+./build/bin/plag-detect detect tests/corpus/anas/small --k 5
+
+# Write JSON report to a file
+./build/bin/plag-detect detect tests/corpus/anas/small --k 5 --format json -o report.json
 ```
 
-Sanitizer build — must be green before anything is pushed:
+### Sanitizer Build (ASan + UBSan)
 
 ```bash
 cmake --preset sanitize
 cmake --build build-sanitize --target check
 ```
 
-Presets: `debug` (`build/`), `sanitize` (`build-sanitize/`), `release` (`build-release/`).
+---
 
-## Layout and ownership
+## Project Structure
 
-One owner per file. If a file is not in your path you do not edit it — you open an issue and
-the owner adds the hook, or you add your own file next to it.
-
-| Path | What lives here | Owner |
-|---|---|---|
-| `CMakeLists.txt`, `.gitignore`, `.clang-format`, `.gitattributes`, `CMakePresets.json`, `README.md` | repo root, frozen after Week 0/1 | Anas |
-| `.github/workflows/ci.yml` | `make check` on push and PR | Anas |
-| `src/main.cpp` | the `plag-detect` entry point | Anas |
-| `src/contract/` | shared types only — frozen after W1 | Anas |
-| `src/common/` | `dyn_array`, `fnv`, `mulmod`, `pos_to_line` — frozen after W1 | Anas |
-| `src/index/` | buffer, reader, walker, tokenizer, rolling hash, hash tables, index builder, span merge | **Anas** |
-| `src/search/` | KMP, candidate generator, scorer, verify mode | **Alyan** |
-| `src/rank/` | max-heap, AVL leaderboard | **Alyan** |
-| `src/report/` | CLI, audit report, JSON writer | **Alyan** |
-| `tests/harness.hpp`, `tests/CMakeLists.txt` | shared test framework, frozen after W1 | Anas creates, Alyan maintains |
-| `tests/test_anas_*.cpp`, `tests/fixtures/anas/`, `tests/corpus/anas/` | Anas's tests and corpora | Anas |
-| `tests/test_alyan_*.cpp`, `tests/fixtures/alyan/`, `tests/corpus/alyan/` | Alyan's tests and corpora | Alyan |
-| `tools/<name>_*` | benchmarks and generators, prefixed by owner | each |
-| `docs/` | design, per-person devlogs and benchmarks, the shared task list | shared |
-
-Every area's `CMakeLists.txt` picks sources up with `file(GLOB ...)`, so adding a new `.cpp`
-never touches a shared file. That single decision removes most of the merge friction.
-
-## The six rules
-
-1. **No STL shortcuts in engine code.** `std::unordered_map`, `std::map`, `std::set`,
-   `std::priority_queue` and `std::sort` are banned under `src/`. `std::string` and file
-   streams are fine, and using an STL container in `tests/` as a comparison oracle is
-   encouraged.
-2. **One owner per file.**
-3. **Everything gets a test.** A step without a test you wrote is not finished.
-4. **Stub first.** Commit the header with final signatures and empty bodies on day one of a
-   step, so the other person never waits.
-5. **Clean build only.** `-Wall -Wextra -Wconversion` with zero warnings, and `make check`
-   green in the sanitizer build.
-6. **Small PRs.** One step = one branch = one PR under ~400 changed lines.
-
-## Working rhythm
-
-* `main` is protected: PR required, CI green required, no force pushes, no deletions.
-* `dev` takes urgent work. Each Sunday demo merges to `main` and is tagged `W<n>-demo`.
-* One branch per person per week, named in `docs/tasks.md` (e.g. `week03-hash-table`), started
-  from the newest `main`.
-* At least 3 commits a week (Mon / Wed / Fri) — the graph is the proof of work.
-* Commit style: `area: what changed (Who W#)` — e.g.
-  `index: chaining hash table with grow at alpha 0.75 (Anas W3)`.
-* Merge with **Squash and merge**, delete the branch, rebase with
-  `git fetch upstream && git rebase upstream/main`, push with `--force-with-lease`.
-
-## Status
-
-Week 0 skeleton: the full layout, the frozen build, the shared contract, the working
-`src/common/` pieces and their tests, and stub headers with final signatures for every class
-in both areas. Feature implementations land week by week per `docs/tasks.md`.
+- `src/common/` — `DynArray`, `fnv1a`, modular arithmetic (`mulmod`, `powmod`, `submod`), and `pos_to_line`.
+- `src/contract/` — Shared structs (`Occurrence`, `Token`, `Span`, `PairScore`, `IndexStats`, `ErrorCode`).
+- `src/index/` — `DynamicBuffer`, `file_reader`, `dir_walker`, `tokenizer`, `RollingHash`, `HashTable`, `OpenHashTable`, `IndexBuilder`, `span_merge`.
+- `src/search/` — `kmp`, `candidate_generator`, `scorer`, `verify_mode`.
+- `src/rank/` — `MaxHeap` and `RankTree` (AVL tree).
+- `src/report/` — `cli`, `audit_report`, `json_writer`.
+- `tests/` — Unit test suites for every component (`test_anas_*` and `test_alyan_*`).
+- `tools/` — Hash table benchmark (`anas_bench_hash`) and corpus helper scripts.

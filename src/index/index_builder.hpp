@@ -1,7 +1,4 @@
-// index_builder.hpp -- file -> tokens -> k-grams -> hash table; Alyan's API.
-// Owner: Anas.  src/index/ is Anas's area.
-// STUB (W4 / Step 6): dummy bodies. Hard deadline Sun 8 Nov -- Alyan's
-// candidate finder compiles against lookup() from that day.
+// Builds the k-gram inverted index over tokenized documents
 #ifndef PLAG_SRC_INDEX_INDEX_BUILDER_HPP_
 #define PLAG_SRC_INDEX_INDEX_BUILDER_HPP_
 
@@ -11,31 +8,36 @@
 #include "common/dyn_array.hpp"
 #include "contract/contract.hpp"
 #include "index/hash_table.hpp"
+#include "index/tokenizer.hpp"
 
 namespace plag {
 
-// Kept alive per document so the report can print excerpts and line numbers
-// without re-reading files.
 struct DocumentView {
   DocumentId id = 0;
   const char* path = nullptr;
-  DynArray<std::uint64_t> norm;   // normalised token ids (what we compare)
-  DynArray<std::uint32_t> posToLine;  // token index -> 1-based line
+  DynArray<char> pathBuf;
+  DynArray<std::uint64_t> norm;
+  DynArray<std::uint32_t> posToLine;
 };
 
 class IndexBuilder {
  public:
-  // One loop: roll(), then table_.insert(h, {id,pos}). No nested loops, which
-  // is why the whole corpus costs O(total tokens) whatever k is.
   void add_document(DocumentId id, const char* path, const std::uint64_t* ids,
                     std::size_t n, std::size_t k);
 
-  // Returns a pointer into the bucket -- no copying, because Alyan calls this
-  // once per k-gram of every document.
+  void add_tokenized_document(DocumentId id, const char* path,
+                              const TokenPool& pool, std::size_t k,
+                              std::size_t file_bytes, bool malformed);
+
   const Occurrence* lookup(std::uint64_t h, std::size_t* countOut) const;
 
-  const DocumentView& doc(DocumentId id) const;   // norm tokens + posToLine
-  const IndexStats& stats() const;                // for --stats and the report
+  const DocumentView& doc(DocumentId id) const;
+  std::size_t doc_count() const { return docs_.size(); }
+  const DynArray<DocumentView>& docs() const { return docs_; }
+  const HashTable<std::uint64_t, OccurrenceList>& table() const { return table_; }
+
+  const IndexStats& stats() const;
+  void set_elapsed_ms(double ms) { st_.ms = ms; }
 
  private:
   HashTable<std::uint64_t, OccurrenceList> table_;

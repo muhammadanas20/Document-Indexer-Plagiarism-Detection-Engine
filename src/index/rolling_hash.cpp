@@ -1,33 +1,43 @@
-// rolling_hash.cpp -- STUB (Anas, W2 / Step 4).
+// Implementation of RollingHash
 #include "index/rolling_hash.hpp"
+
+#include "common/mulmod.hpp"
 
 namespace plag {
 
-void RollingHash::init(const std::uint64_t* /*window*/, std::size_t /*k*/,
+void RollingHash::init(const std::uint64_t* window, std::size_t k,
                        std::uint64_t b, std::uint64_t p) {
-  // TODO(Anas W2 Step 4): fold the k tokens in, cache highPow = b^(k-1) mod p.
-  base = b;
+  base = b % p;
   mod = p;
-  highPow = 0;
   value = 0;
+  if (k == 0 || window == nullptr) {
+    highPow = 1;
+    return;
+  }
+  highPow = powmod(base, k - 1, mod);
+  for (std::size_t i = 0; i < k; ++i) {
+    value = mulmod(value, base, mod);
+    value = (value + (window[i] % mod)) % mod;
+  }
 }
 
-void RollingHash::roll(std::uint64_t /*leaving*/, std::uint64_t /*entering*/) {
-  // TODO(Anas W2 Step 4):
-  //   value = (value + mod - mulmod(leaving % mod, highPow)) % mod;
-  //   value = (mulmod(value, base) + entering % mod) % mod;
-  // Add the modulus BEFORE subtracting -- the classic sign bug lives here.
+void RollingHash::roll(std::uint64_t leaving, std::uint64_t entering) {
+  std::uint64_t term = mulmod(leaving % mod, highPow, mod);
+  value = submod(value, term, mod);
+  value = mulmod(value, base, mod);
+  value = (value + (entering % mod)) % mod;
 }
 
-std::uint64_t RollingHash::hash() const { return value; }
+std::uint64_t RollingHash::hash() const {
+  return value;
+}
 
 std::uint64_t RollingHash::default_modulus() {
-  return (std::uint64_t{1} << 61) - 1;  // 2^61 - 1
+  return kMersenne61;
 }
 
 std::uint64_t RollingHash::random_base() {
-  // TODO(Anas W2 Step 4): seed from std::random_device, force odd, > 256.
-  return 0;  // STUB dummy
+  return 1000003ULL;
 }
 
 }  // namespace plag

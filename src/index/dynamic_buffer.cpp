@@ -1,11 +1,15 @@
-// dynamic_buffer.cpp -- STUB (Anas, W1 / Step 2). Bodies are dummies.
+// Implementation of DynamicBuffer
 #include "index/dynamic_buffer.hpp"
+
+#include <cstring>
 
 namespace plag {
 
 DynamicBuffer::DynamicBuffer() = default;
 
-DynamicBuffer::~DynamicBuffer() { delete[] d_; }
+DynamicBuffer::~DynamicBuffer() {
+  delete[] d_;
+}
 
 DynamicBuffer::DynamicBuffer(DynamicBuffer&& other) noexcept
     : d_(other.d_), n_(other.n_), c_(other.c_) {
@@ -27,19 +31,42 @@ DynamicBuffer& DynamicBuffer::operator=(DynamicBuffer&& other) noexcept {
   return *this;
 }
 
-void DynamicBuffer::reserve_at_least(std::size_t /*need*/) {
-  // TODO(Anas W1 Step 2): grow to max(need, c_*2) from an initial 4 KiB.
+void DynamicBuffer::reserve_at_least(std::size_t need) {
+  if (need <= c_) return;
+  std::size_t new_cap = (c_ == 0) ? 4096 : c_;
+  while (new_cap < need) {
+    new_cap *= 2;
+  }
+  std::uint8_t* new_buf = new std::uint8_t[new_cap];
+  if (n_ > 0 && d_ != nullptr) {
+    std::memcpy(new_buf, d_, n_);
+  }
+  delete[] d_;
+  d_ = new_buf;
+  c_ = new_cap;
 }
 
-void DynamicBuffer::append(const std::uint8_t* /*src*/, std::size_t /*n*/) {
-  // TODO(Anas W1 Step 2): reserve, memcpy, bump n_.
+void DynamicBuffer::append(const std::uint8_t* src, std::size_t n) {
+  if (src == nullptr || n == 0) return;
+  reserve_at_least(n_ + n);
+  std::memcpy(d_ + n_, src, n);
+  n_ += n;
 }
 
 void DynamicBuffer::trim_trailing_cr() {
-  // TODO(Anas W1 Step 2): drop a single trailing '\r'.
+  if (d_ == nullptr || n_ == 0) return;
+  std::size_t write_pos = 0;
+  for (std::size_t read_pos = 0; read_pos < n_; ++read_pos) {
+    if (d_[read_pos] != static_cast<std::uint8_t>('\r')) {
+      d_[write_pos++] = d_[read_pos];
+    }
+  }
+  n_ = write_pos;
 }
 
-void DynamicBuffer::clear() { n_ = 0; }
+void DynamicBuffer::clear() {
+  n_ = 0;
+}
 
 std::size_t DynamicBuffer::size() const { return n_; }
 bool DynamicBuffer::empty() const { return n_ == 0; }

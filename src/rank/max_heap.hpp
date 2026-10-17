@@ -1,6 +1,4 @@
-// max_heap.hpp -- top-k leaderboard heap.
-// Owner: ALYAN.  src/rank/ is Alyan's area.
-// STUB (Alyan, W3): dummy bodies.
+// Binary max-heap for extracting top-k most suspicious document pairs
 #ifndef PLAG_SRC_RANK_MAX_HEAP_HPP_
 #define PLAG_SRC_RANK_MAX_HEAP_HPP_
 
@@ -11,8 +9,6 @@
 
 namespace plag {
 
-// Binary max-heap over PairScore, ordered by suspicion_key(). No
-// std::priority_queue and no std::sort -- banned in engine code.
 class MaxHeap {
  public:
   void push(const PairScore& p);
@@ -21,7 +17,6 @@ class MaxHeap {
   std::size_t size() const;
   bool empty() const;
 
-  // The k highest-scoring pairs, in descending order.
   std::size_t top_k(std::size_t k, DynArray<PairScore>& out) const;
 
  private:
