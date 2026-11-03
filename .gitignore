@@ -1,0 +1,7 @@
+build/
+build-*/
+*.o
+*.a
+report.txt
+report*.json
+.vscode/

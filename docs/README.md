@@ -1,11 +1,11 @@
 # docs/
 
-| file | what it is | who writes |
+| file | what it is | who reads it |
 |---|---|---|
-| `design.md` | the one architecture document | Anas §1-2, Alyan §3-4, in separate PRs |
-| `devlog-anas.md` / `devlog-alyan.md` | private-by-owner working log, so no clash | each their own |
-| `benchmarks-anas.md` / `benchmarks-alyan.md` | every measured number, in the same PR as the code | each their own |
-| `tasks.md` | the shared task list = the timeline; tick your own rows | both |
+| `design.md` | architecture, formulas, thresholds | both, before the viva |
+| `viva-guide-anas.md` | Anas's part + the deep questions on hashing/sorting/indexing | Anas |
+| `viva-guide-alyan.md` | Alyan's part + the deep questions on KMP/AVL/heap/graph | Alyan |
+| `viva-guide-shared.md` | pipeline, demo script, complexity table, questions for both | both |
 
-Rule: decisions made on the Sunday call go into `design.md` immediately, or they evaporate.
-Every number quoted in the report must have a line in one of the benchmark files.
+Rule: if a number or a threshold is quoted in the viva, it must appear in one of these
+files **and** in the code. If it is not in both places, do not quote it.

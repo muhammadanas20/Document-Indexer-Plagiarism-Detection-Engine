@@ -1,36 +1,110 @@
-# Architecture & Design Notes
+# Design notes
 
-## 1. Token Views and Line Mapping (`src/index/tokenizer.cpp`)
+Short version of how the engine works and why every structure is there. Written so that
+either member can read it before the viva.
 
-Each file is read once into a `DynamicBuffer` and tokenized in a single pass:
-- Comments (`//` and `/* ... */`) and whitespace are skipped.
-- Each token stores its byte offset, length, 1-based line number (computed via binary search over `line_starts`), and 64-bit FNV-1a token ID.
-- When `--normalize=case` is enabled (default), ASCII letters are converted to lowercase while hashing so case differences and formatting changes produce the same token IDs.
+## 1. Pipeline
 
-## 2. O(1) Rolling Hash (`src/index/rolling_hash.cpp`)
+```
+files ─► loader ─► tokenizer ─► index ─► similarity ─► ranking ─► report
+          stack     line no.    hash table   Jaccard+KMP   sort/heap/AVL  text
+          quick sort            BST
+                                probing table
+                                rolling hash
+```
 
-For a window of $k$ token IDs $(t_0, t_1, \dots, t_{k-1})$, the polynomial hash is:
+## 2. Normalisation (why two files with different spacing still match)
 
-$$H = \left(\sum_{i=0}^{k-1} t_i \cdot b^{k-1-i}\right) \bmod p$$
+| Input | Tokens |
+|---|---|
+| `int Sum(int a) {` | `int sum int a` |
+| `int  sum ( int a )` | `int sum int a` |
+| `// int Sum(int a)` | *(nothing — the comment is dropped)* |
 
-where $p = 2^{61} - 1$. When sliding the window by one token (removing $t_{\text{out}}$ and adding $t_{\text{in}}$):
+Everything is lower-cased, punctuation is thrown away, `//` and `/* */` are removed from
+source files, and each token keeps its 1-based line number.
 
-$$H' = \left((H + p - (t_{\text{out}} \cdot b^{k-1} \bmod p)) \cdot b + t_{\text{in}}\right) \bmod p$$
+## 3. Inverted index
 
-Because $b^{k-1} \bmod p$ (`highPow`) is precomputed once in `init()`, each slide takes $O(1)$ time regardless of $k$.
+```
+wordTable_ : HashTable<std::string, LinkedList<Occurrence>*>
 
-## 3. Candidate Generation, KMP Verification & Scoring (`src/search/`)
+ "total" ─► [ {doc 0, line 5, count 7} ] ─► [ {doc 1, line 8, count 7} ] ─► null
+```
 
-1. **Candidate Generation:** Iterates over the inverted index buckets and counts how many distinct $k$-gram fingerprints each document pair `(docA, docB)` shares using `HashTable<uint64_t, uint32_t>`.
-2. **KMP Verification:** For each candidate pair, `kmp_find_all` verifies exact token sequence matches over the normalized token ID arrays, and `merge_spans` merges contiguous or overlapping $k$-gram matches on the same diagonal into maximal copied spans.
-3. **Scoring:**
-   - **Jaccard:** $\frac{|A \cap B|}{|A \cup B|}$
-   - **Containment:** $\frac{|A \cap B|}{\min(|A|, |B|)}$ (catches small copied sections inside a larger file)
-   - **Coverage:** $\frac{\text{matched tokens}}{\min(\text{tokens}_A, \text{tokens}_B)}$
-   - **Suspicion Key:** $0.50 \cdot \text{coverage} + 0.30 \cdot \text{containment} + 0.20 \cdot \text{jaccard}$
+* Key = word, value = linked list of occurrences → one lookup answers "which documents and
+  which lines", average **O(1)**.
+* Collision resolution = **separate chaining** (every bucket is a `LinkedList`).
+* Rehashing when `size / buckets > 0.75` → the average chain length stays below 1.
+* Deletion is O(1) (unlink from the chain), which is why chaining was chosen over open
+  addressing for this table.
 
-## 4. Ranking & Reporting (`src/rank/`, `src/report/`)
+A second table with **linear probing** (`probing.hpp`) counts the words of a single document
+where no deletion happens; it exists to compare the two collision techniques and to collect
+the "average probes" statistic.
 
-- **`MaxHeap`:** Array-backed binary max-heap supporting $O(\log n)$ `push`/`pop` and `top_k` extraction.
-- **`RankTree`:** Self-balancing AVL tree using LL, RR, LR, and RL rotations to maintain $O(\log n)$ height even on sorted insertions, with reverse in-order traversal for leaderboard queries.
-- **`AuditReport` & `json_writer`:** Prints corpus statistics, ranked suspicious document pairs, and matched token spans mapped to 1-based source line numbers via `DocumentView::posToLine`.
+## 4. Fingerprints (rolling hash)
+
+For a window of k token hashes `t0 … t(k-1)`:
+
+```
+H  = ( … ((t0 · b + t1) · b + t2) … ) mod M           b = 131, M = 1 000 000 007
+H' = ((H − t_out · b^(k−1)) · b + t_in) mod M         one slide = O(1)
+```
+
+`b^(k−1) mod M` is computed once. The fingerprints of a document are put into a hash table to
+remove duplicates and then **merge sorted**, so two documents are compared with one walk:
+
+```
+shared = number of equal values while walking both sorted arrays    O(n + m)
+Jaccard      = shared / (|A| + |B| − shared)
+Containment  = shared / min(|A|, |B|)
+```
+
+## 5. Proving a match with KMP
+
+Score alone is not evidence, so for every pair with a score above the limit:
+
+1. take every chunk of **6 consecutive words** of document A,
+2. search that chunk in B's normalised text with KMP (`O(n+m)` each),
+3. if it is found at the position that continues the current block, extend the block,
+   otherwise close it and start a new one,
+4. convert word indices into line numbers (`wordLines[]`, and `wordStart[]` + binary search
+   for positions found by KMP).
+
+Result: `copied: ali.cpp lines 4-12 == bilal.cpp lines 7-15 (21 words)`.
+
+## 6. Verdict thresholds
+
+| Score | Label |
+|---|---|
+| ≥ 0.75 | CRITICAL |
+| ≥ 0.40 | HIGH |
+| ≥ 0.20 | MEDIUM |
+| ≥ 0.08 | LOW |
+| < 0.08 | not reported |
+
+Constants: `kMinScore` and `suspicionLabel()` in `src/similarity.cpp`, k in `main.cpp`
+(`AppData::kgramSize = 5`).
+
+## 7. Ranking
+
+| Question | Structure | Cost |
+|---|---|---|
+| "the whole list, best first" | merge sort on the pair list | O(P log P) |
+| "only the top K" | max heap, pop K times | O(P + K log P) |
+| "any rank, always sorted" | AVL tree, reverse in-order | O(P log P) insert |
+
+## 8. Clusters (graph)
+
+Vertex = document, edge = "score ≥ threshold". One BFS per unvisited vertex gives the
+connected components, i.e. the groups of students who copied together. Complexity O(V + E).
+
+## 9. Errors and limits
+
+* A folder that cannot be opened, or that has no supported files → the loader returns false and
+  the menu prints the reason (`loadCorpus(..., std::string& error)`).
+* Files bigger than 2 MB, hidden files and `build/` are skipped.
+* A document with fewer than k words has no fingerprints and can never be reported.
+* Reordered sentences, paraphrasing and translated text are **not** detected — the comparison
+  is word-level.
