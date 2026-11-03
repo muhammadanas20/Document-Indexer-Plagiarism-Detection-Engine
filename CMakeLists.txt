@@ -1,55 +1,38 @@
-# Top-level CMake build configuration for plag-engine (C++17)
-cmake_minimum_required(VERSION 3.20)
+# CMakeLists.txt  --  builds the engine (plag-detect) and the tests
+# Simple on purpose: one library, one program, one test executable per file.
 
-project(plag_engine
-        VERSION 1.0.0
-        DESCRIPTION "Document indexer and plagiarism detection engine"
-        LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.16)
+project(document_indexer CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(PLAG_WERROR "Treat compiler warnings as errors" ON)
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-add_compile_options(-Wall -Wextra -Wconversion)
-if(PLAG_WERROR)
-  add_compile_options(-Werror)
-endif()
+add_compile_options(-Wall -Wextra)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+# ---- library: every .cpp in src/ except main.cpp --------------------------
+file(GLOB ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(REMOVE_ITEM ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 
-enable_testing()
+add_library(engine STATIC ${ENGINE_SOURCES})
+target_include_directories(engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_subdirectory(src/common)
-add_subdirectory(src/contract)
-add_subdirectory(src/index)
-add_subdirectory(src/search)
-add_subdirectory(src/rank)
-add_subdirectory(src/report)
-add_subdirectory(tests)
-add_subdirectory(tools)
-
+# ---- the program ----------------------------------------------------------
 add_executable(plag-detect src/main.cpp)
-target_include_directories(plag-detect PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_link_libraries(plag-detect PRIVATE
-                      plag_contract
-                      plag_index
-                      plag_search
-                      plag_rank
-                      plag_report)
+target_link_libraries(plag-detect PRIVATE engine)
 
-get_property(PLAG_TEST_TARGETS GLOBAL PROPERTY PLAG_TEST_TARGETS)
-get_property(PLAG_TOOL_TARGETS GLOBAL PROPERTY PLAG_TOOL_TARGETS)
-
-add_custom_target(check
-                  COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-                  DEPENDS plag-detect ${PLAG_TEST_TARGETS} ${PLAG_TOOL_TARGETS}
-                  COMMENT "Running ctest (plag-engine)")
+# ---- tests: one executable per tests/test_*.cpp ---------------------------
+enable_testing()
+file(GLOB TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_*.cpp)
+foreach(test_source ${TEST_SOURCES})
+  get_filename_component(test_name ${test_source} NAME_WE)
+  add_executable(${test_name} ${test_source})
+  target_link_libraries(${test_name} PRIVATE engine)
+  # the tests read the sample corpus through this path
+  target_compile_definitions(${test_name} PRIVATE
+    SAMPLES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/students")
+  add_test(NAME ${test_name} COMMAND ${test_name})
+endforeach()

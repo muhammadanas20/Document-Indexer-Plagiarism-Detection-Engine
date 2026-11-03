@@ -1,0 +1,15 @@
+Bubble sort written in pseudocode for the DS lab.
+
+procedure bubbleSort(list of items)
+  repeat
+    swapped = false
+    for i from 1 to length(list) - 1 do
+      if list[i - 1] > list[i] then
+        swap list[i - 1] and list[i]
+        swapped = true
+      end if
+    end for
+  until not swapped
+
+The outer loop runs at most n times and the inner loop compares neighbours,
+so the worst case cost is n squared comparisons.
