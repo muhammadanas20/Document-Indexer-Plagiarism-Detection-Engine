@@ -1,16 +1,10 @@
-// report.cpp  --  see report.hpp
-// Owner: Alyan
-
 #include "report.hpp"
-
 #include <cstddef>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
 
-namespace dip {
-namespace {
-
+// report
 std::string shortPath(const std::string& path) {
   std::size_t slash = path.find_last_of('/');
   return (slash == std::string::npos) ? path : path.substr(slash + 1);
@@ -21,8 +15,6 @@ std::string scoreText(double value) {
   text << std::fixed << std::setprecision(3) << value;
   return text.str();
 }
-
-}  // namespace
 
 void printLine(std::ostream& out, char character, int count) {
   for (int i = 0; i < count; ++i) out << character;
@@ -113,7 +105,7 @@ void printPairs(std::ostream& out, const Index& index,
       const std::size_t maxSpans = 5;
       for (std::size_t s = 0; s < pair.spans.size() && s < maxSpans; ++s) {
         const MatchedSpan& span = pair.spans[s];
-        out << "        copied: " << shortPath(documents[static_cast<std::size_t>(pair.firstDoc)].path)
+        out << "        matched: " << shortPath(documents[static_cast<std::size_t>(pair.firstDoc)].path)
             << " lines " << span.firstStartLine << "-" << span.firstEndLine
             << "  ==  "
             << shortPath(documents[static_cast<std::size_t>(pair.secondDoc)].path)
@@ -198,5 +190,3 @@ void printVocabulary(std::ostream& out, const std::vector<std::string>& words,
     out << '\n';
   }
 }
-
-}  // namespace dip

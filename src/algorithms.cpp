@@ -1,17 +1,12 @@
-// sort.cpp  --  see sort.hpp
-// Owner: Anas
+#include "algorithms.hpp"
+#include <cstddef>
 
-#include "sort.hpp"
-
-namespace dip {
-namespace {
-
-// ---- merge sort: split, sort both halves, merge them back -------------------
+// sort
 void mergeRange(std::vector<unsigned long long>& keys, std::size_t left,
                 std::size_t middle, std::size_t right,
                 std::vector<unsigned long long>& buffer) {
-  std::size_t i = left;        // walks the left half
-  std::size_t j = middle + 1;  // walks the right half
+  std::size_t i = left;
+  std::size_t j = middle + 1;
   std::size_t out = left;
 
   while (i <= middle && j <= right) {
@@ -29,20 +24,18 @@ void mergeRange(std::vector<unsigned long long>& keys, std::size_t left,
 
 void mergeSortRange(std::vector<unsigned long long>& keys, std::size_t left,
                     std::size_t right, std::vector<unsigned long long>& buffer) {
-  if (left >= right) return;  // 0 or 1 element is already sorted
+  if (left >= right) return;
   std::size_t middle = left + (right - left) / 2;
-  mergeSortRange(keys, left, middle, buffer);        // sort the left half
-  mergeSortRange(keys, middle + 1, right, buffer);   // sort the right half
-  mergeRange(keys, left, middle, right, buffer);     // then merge
+  mergeSortRange(keys, left, middle, buffer);
+  mergeSortRange(keys, middle + 1, right, buffer);
+  mergeRange(keys, left, middle, right, buffer);
 }
 
-// ---- quick sort ------------------------------------------------------------
-// Lomuto partition: everything smaller than the pivot goes to the left.
 std::size_t partition(std::vector<std::string>& items, std::size_t low,
                       std::size_t high) {
   std::size_t middle = low + (high - low) / 2;
   std::string pivot = items[middle];
-  // Move the pivot to the end so the loop below is simple.
+
   std::string temporary = items[middle];
   items[middle] = items[high];
   items[high] = temporary;
@@ -70,7 +63,6 @@ void quickSortRange(std::vector<std::string>& items, std::size_t low,
   if (pivotIndex < high) quickSortRange(items, pivotIndex + 1, high);
 }
 
-// ---- merge sort on the pair list (same algorithm, other element type) ------
 void mergePairs(std::vector<PairResult>& pairs, std::size_t left,
                 std::size_t middle, std::size_t right,
                 std::vector<PairResult>& buffer) {
@@ -79,7 +71,7 @@ void mergePairs(std::vector<PairResult>& pairs, std::size_t left,
   std::size_t out = left;
 
   while (i <= middle && j <= right) {
-    // '>=' keeps the order of equal scores stable.
+
     if (pairs[i].jaccard >= pairs[j].jaccard) {
       buffer[out++] = pairs[i++];
     } else {
@@ -99,8 +91,6 @@ void mergeSortPairRange(std::vector<PairResult>& pairs, std::size_t left,
   mergeSortPairRange(pairs, middle + 1, right, buffer);
   mergePairs(pairs, left, middle, right, buffer);
 }
-
-}  // namespace
 
 void mergeSortPairs(std::vector<PairResult>& pairs) {
   if (pairs.size() < 2) return;
@@ -123,7 +113,7 @@ void insertionSortScores(std::vector<ScoreEntry>& entries) {
   for (std::size_t i = 1; i < entries.size(); ++i) {
     ScoreEntry current = entries[i];
     std::size_t j = i;
-    // Walk backwards while the previous entry has a SMALLER score.
+
     while (j > 0 && entries[j - 1].score < current.score) {
       entries[j] = entries[j - 1];
       --j;
@@ -145,7 +135,106 @@ int binarySearchWord(const std::vector<std::string>& sortedWords,
       high = middle - 1;
     }
   }
-  return -1;  // not found
+  return -1;
 }
 
-}  // namespace dip
+// string match
+const unsigned long long kRabinBase = 257ULL;
+const unsigned long long kRabinMod = 1000000007ULL;
+
+unsigned long long charHash(char c) {
+  return static_cast<unsigned char>(c);
+}
+
+std::vector<std::size_t> bruteForceSearch(const std::string& text,
+                                          const std::string& pattern) {
+  std::vector<std::size_t> positions;
+  if (pattern.empty() || pattern.size() > text.size()) return positions;
+
+  for (std::size_t start = 0; start + pattern.size() <= text.size(); ++start) {
+    std::size_t matched = 0;
+    while (matched < pattern.size() &&
+           text[start + matched] == pattern[matched]) {
+      ++matched;
+    }
+    if (matched == pattern.size()) positions.push_back(start);
+  }
+  return positions;
+}
+
+std::vector<std::size_t> buildPrefixTable(const std::string& pattern) {
+
+  // save how much of the pattern we can keep after a mismatch
+  std::vector<std::size_t> prefix(pattern.size(), 0);
+  std::size_t length = 0;
+  for (std::size_t i = 1; i < pattern.size(); ++i) {
+    while (length > 0 && pattern[i] != pattern[length]) {
+      length = prefix[length - 1];
+    }
+    if (pattern[i] == pattern[length]) ++length;
+    prefix[i] = length;
+  }
+  return prefix;
+}
+
+std::vector<std::size_t> kmpSearch(const std::string& text,
+                                   const std::string& pattern) {
+  std::vector<std::size_t> positions;
+  if (pattern.empty() || pattern.size() > text.size()) return positions;
+
+  std::vector<std::size_t> prefix = buildPrefixTable(pattern);
+  std::size_t matched = 0;
+
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    while (matched > 0 && text[i] != pattern[matched]) {
+      matched = prefix[matched - 1];
+    }
+    if (text[i] == pattern[matched]) ++matched;
+    if (matched == pattern.size()) {
+      positions.push_back(i + 1 - pattern.size());
+      matched = prefix[matched - 1];
+    }
+  }
+  return positions;
+}
+
+std::vector<std::size_t> rabinKarpSearch(const std::string& text,
+                                         const std::string& pattern) {
+  std::vector<std::size_t> positions;
+  if (pattern.empty() || pattern.size() > text.size()) return positions;
+
+  const std::size_t m = pattern.size();
+
+  unsigned long long highPower = 1ULL;
+  for (std::size_t i = 0; i + 1 < m; ++i) {
+    highPower = (highPower * kRabinBase) % kRabinMod;
+  }
+
+  unsigned long long patternHash = 0ULL;
+  unsigned long long windowHash = 0ULL;
+  for (std::size_t i = 0; i < m; ++i) {
+    patternHash = (patternHash * kRabinBase + charHash(pattern[i])) % kRabinMod;
+    windowHash = (windowHash * kRabinBase + charHash(text[i])) % kRabinMod;
+  }
+  if (windowHash == patternHash && text.compare(0, m, pattern) == 0) positions.push_back(0);
+
+  for (std::size_t start = 1; start + m <= text.size(); ++start) {
+
+    unsigned long long leaving = (charHash(text[start - 1]) * highPower) % kRabinMod;
+    windowHash = (windowHash + kRabinMod - leaving) % kRabinMod;
+    windowHash = (windowHash * kRabinBase + charHash(text[start + m - 1])) % kRabinMod;
+
+    if (windowHash == patternHash) {
+
+      bool equal = true;
+      for (std::size_t k = 0; k < m; ++k) {
+        if (text[start + k] != pattern[k]) {
+          equal = false;
+          break;
+        }
+      }
+      if (equal) positions.push_back(start);
+    }
+  }
+  return positions;
+}

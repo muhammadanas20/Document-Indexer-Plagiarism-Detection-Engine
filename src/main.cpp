@@ -1,18 +1,7 @@
-// main.cpp  --  the menu of the program
-// Owner: Alyan (the menu only calls what is in the other files)
-//
-// Every menu line uses a different data structure, and the guide says which:
-//   1 load folder      -> stack (folder walk), quick sort (file order)
-//   2 statistics       -> hash tables, BST
-//   3 search a word    -> hash table (inverted index)
-//   4 search a phrase  -> brute force / KMP / Rabin-Karp
-//   5 detect plagiarism-> k-gram rolling hash + merge + KMP
-//   6 top-K pairs      -> max heap
-//   7 leaderboard      -> AVL tree
-//   8 clusters         -> graph + BFS + queue
-//   9 vocabulary       -> BST in-order + binary search
-//   0 exit
-
+#include "engine.hpp"
+#include "algorithms.hpp"
+#include "report.hpp"
+#include "structures.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
@@ -22,21 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "avl.hpp"
-#include "graph.hpp"
-#include "heap.hpp"
-#include "index.hpp"
-#include "loader.hpp"
-#include "report.hpp"
-#include "similarity.hpp"
-#include "sort.hpp"
-#include "string_match.hpp"
-#include "tokenizer.hpp"
-
-namespace {
-
-using namespace dip;
-
+// main
 struct AppData {
   std::vector<Document> documents;
   std::unique_ptr<Index> index;
@@ -83,7 +58,6 @@ std::string readLine(const std::string& prompt) {
   return line;
 }
 
-// ---------------------------------------------------------------- menu 1
 void loadFolder(AppData& app, const std::string& folder) {
   std::cout << "Reading folder: " << folder << '\n';
 
@@ -96,7 +70,7 @@ void loadFolder(AppData& app, const std::string& folder) {
     return;
   }
 
-  app.documents.swap(documents);  // the index keeps a pointer to this vector
+  app.documents.swap(documents);
   app.index.reset(new Index());
   app.index->build(app.documents, app.kgramSize);
   app.pairs.clear();
@@ -107,12 +81,11 @@ void loadFolder(AppData& app, const std::string& folder) {
             << millisecondsSince(start) << " ms)\n";
 }
 
-// ---------------------------------------------------------------- menu 3
 void searchWord(AppData& app) {
   std::string word = readLine("Word to search: ");
   if (word.empty()) return;
 
-  TokenizedText tokens = tokenize(word, false);  // normalise the same way
+  TokenizedText tokens = tokenize(word, false);
   if (tokens.words.empty()) {
     std::cout << "  That is not a word.\n";
     return;
@@ -126,7 +99,6 @@ void searchWord(AppData& app) {
   std::cout << "  lookup time: " << elapsed << " ms\n";
 }
 
-// ---------------------------------------------------------------- menu 4
 void searchPhrase(AppData& app) {
   std::string phrase = readLine("Phrase to search: ");
   TokenizedText tokens = tokenize(phrase, false);
@@ -143,7 +115,6 @@ void searchPhrase(AppData& app) {
 
   const std::vector<Document>& documents = app.index->documents();
 
-  // Run all three algorithms, because the point of the lab is to compare them.
   const char* names[3] = {"brute force", "KMP", "Rabin-Karp"};
   for (int algorithm = 0; algorithm < 3; ++algorithm) {
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
@@ -161,12 +132,17 @@ void searchPhrase(AppData& app) {
       } else {
         positions = rabinKarpSearch(text, pattern);
       }
-      if (!positions.empty()) {
+      for (std::size_t i = 0; i < positions.size(); ++i) {
+        std::size_t pos = positions[i];
+        std::size_t end = pos + pattern.size();
+        if ((pos != 0 && text[pos - 1] != ' ') ||
+            (end != text.size() && text[end] != ' ')) continue;
         ++matches;
         if (firstDocument.empty()) {
           firstDocument = documents[d].path;
-          firstLine = documents[d].lineOfPosition(positions[0]);
+          firstLine = documents[d].lineOfPosition(pos);
         }
+        break;
       }
     }
     double elapsed = millisecondsSince(start);
@@ -180,7 +156,6 @@ void searchPhrase(AppData& app) {
   std::cout << "  All three must report the same number of matches.\n";
 }
 
-// ---------------------------------------------------------------- menu 5
 void detectPlagiarism(AppData& app) {
   std::cout << "Comparing " << app.index->documentCount()
             << " documents (k = " << app.index->kgramSize() << ")...\n";
@@ -189,7 +164,6 @@ void detectPlagiarism(AppData& app) {
   app.pairs = compareAll(*app.index, 1);
   double elapsed = millisecondsSince(start);
 
-  // Biggest score first: our own merge sort (O(n log n)).
   std::vector<PairResult> sorted = app.pairs;
   mergeSortPairs(sorted);
 
@@ -213,7 +187,6 @@ void detectPlagiarism(AppData& app) {
   }
 }
 
-// ---------------------------------------------------------------- menu 6
 void showTopPairs(AppData& app) {
   if (app.pairs.empty()) {
     std::cout << "  Run option 5 first.\n";
@@ -231,17 +204,16 @@ void showTopPairs(AppData& app) {
     heap.push(entry);
   }
   std::vector<ScoreEntry> best = heap.topK(static_cast<std::size_t>(k));
-  insertionSortScores(best);  // K is small, insertion sort is the right tool
+  insertionSortScores(best);
   printTopK(std::cout, *app.index, best);
 }
 
-// ---------------------------------------------------------------- menu 7
 void showLeaderboard(AppData& app) {
   if (app.pairs.empty()) {
     std::cout << "  Run option 5 first.\n";
     return;
   }
-  Leaderboard board;  // the AVL tree
+  Leaderboard board;
   for (std::size_t i = 0; i < app.pairs.size(); ++i) {
     board.insert(app.pairs[i].jaccard, app.pairs[i].firstDoc, app.pairs[i].secondDoc);
   }
@@ -257,7 +229,6 @@ void showLeaderboard(AppData& app) {
             << " node(s)  (nothing degenerates into a list)\n";
 }
 
-// ---------------------------------------------------------------- menu 8
 void showClusters(AppData& app) {
   if (app.pairs.empty()) {
     std::cout << "  Run option 5 first.\n";
@@ -280,9 +251,8 @@ void showClusters(AppData& app) {
   printClusters(std::cout, *app.index, graph.clusters());
 }
 
-// ---------------------------------------------------------------- menu 9
 void showVocabulary(AppData& app) {
-  std::vector<std::string> words = app.index->sortedVocabulary();  // BST in-order
+  std::vector<std::string> words = app.index->sortedVocabulary();
   printVocabulary(std::cout, words, 30);
 
   std::string word = readLine("Check a word with binary search (Enter to skip): ");
@@ -300,8 +270,6 @@ void showVocabulary(AppData& app) {
               << " document(s) (BST lookup)\n";
   }
 }
-
-}  // namespace
 
 int main(int argc, char** argv) {
   AppData app;
